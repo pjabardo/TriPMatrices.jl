@@ -1,14 +1,14 @@
 immutable SymTridiagonalP{T} <: AbstractMatrix{T}
-    dl::Vector{T}
     d::Vector{T}
+    du::Vector{T}
     x2::Vector{T}
 end
 
-function SymTridiagonalP{T}(dl::Vector{T}, d::Vector{T})
-    if length(dl) != length(d)
+function SymTridiagonalP{T}(d::Vector{T}, du::Vector{T})
+    if length(du) != length(d)
         throw(DimensionMismatch("Subdiagonal has wrong length."))
     end
-    new(dl, d, zeros(T, length(d)))
+    SymTridiagonalP(d, du, zeros(T, length(d)))
 end
 
 import Base.size
@@ -36,11 +36,11 @@ function convert{T}(::Type{Matrix{T}}, M::SymTridiagonalP{T})
     end
 
     for i = 1:length(M.d)-1
-        A[i+1,i] = M.dl[i+1]
-        A[i,i+1] = M.dl[i+1]
+        A[i+1,i] = M.du[i]
+        A[i,i+1] = M.du[i]
     end
-    A[1, length(M.d)] = M.dl[1]
-    A[length(M.d), 1] = M.dl[1]
+    A[1, length(M.d)] = M.du[end]
+    A[length(M.d), 1] = M.du[end]
     A
 end
 
@@ -51,11 +51,11 @@ function similar(M::SymTridiagonalP, T, dims::Dims)
     if length(dims) != 2 || dims[1] != dims[2]
         throw(DimensionMismatch("Periodic Tridiagonal matrices must be square"))
     end
-    SymTridiagonalP{T}(simiular(M.dl), similar(M.d), similar(M.x2))
+    SymTridiagonalP{T}(simiular(M.d), similar(M.du), similar(M.x2))
 end
 
 import Base.copy!
-copy!(dest::SymTridiagonalP, src::SymTridiagonalP) = SymTridiagonalP(copy!(dest.dl, src.dl), copy!(dest.d, src.d), copy!(dest.x2, src.x2))
+copy!(dest::SymTridiagonalP, src::SymTridiagonalP) = SymTridiagonalP(copy!(dest.d, src.d), copy!(dest.du, src.du), copy!(dest.x2, src.x2))
 
 
 
@@ -64,14 +64,14 @@ import Base.conj, Base.copy, Base.round, Base.trunc, Base.floor, Base.ceil, Base
 
 for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :abs, :real, :imag)
     @eval function ($func)(M::SymTridiagonalP)
-        SymTridiagonalP(($func)(M.dl), ($func)(M.d), ($func)(M.x2))
+        SymTridiagonalP(($func)(M.d), ($func)(M.du), ($func)(M.x2))
     end
 end
 
 
 for func in (:round, :trunc, :floor, :ceil)
     @eval function ($func){T<:Integer}(::Type{T},M::SymTridiagonalP)
-        SymTridiagonalP(($func)(T,M.dl), ($func)(T,M.d), ($func)(T,M.x2))
+        SymTridiagonalP(($func)(T,M.d), ($func)(T,M.du), ($func)(T,M.x2))
     end
 end
 
@@ -83,15 +83,15 @@ ctranspose(M::SymTridiagonalP) = conj(transpose(M))
 import Base.diag
 
 function diag{T}(M::SymTridiagonalP{T}, n::Integer=0)
-    n = -abs(n)
+    n = (n < 0)?-n:n
     if n == 0
         return M.d
-    elseif n == -1
-        return M.dl[2:end]
-    elseif n==-(length(M.d)-1)
-        return [M.dl[1]]
-    elseif (-n) < size(M,1)
-        return zeros(T,size(M,1) + n)
+    elseif n == 1
+        return M.du[1:end-1]
+    elseif n == length(M.d)-1
+        return [M.du[end]]
+    elseif n < size(M,1)
+        return zeros(T,size(M,1) - n)
     else
         throw(BoundsError("$n-th diagonal of a $(size(M)) matrix doesn't exist!"))
     end
@@ -106,21 +106,21 @@ function getindex{T}(A::SymTridiagonalP{T}, i::Integer, j::Integer)
     if i == j
         return A.d[i]
     elseif i == j + 1
-        return A.dl[i]
+        return A.du[j]
     elseif i + 1 == j
-        return A.dl[j]
+        return A.du[i]
     elseif i == 1 && j == length(A.d)
-        return A.dl[1]
+        return A.du[end]
     elseif j == 1 && i == length(A.d)
-        return A.dl[1]
+        return A.du[end]
     else
         return zero(T)
     end
 end
 
 import  Base.istriu, Base.istril
-istriu(M::SymTridiagonalP) = all(M.dl .== 0) 
-istriu(M::SymTridiagonalP) = all(M.dl .== 0)
+istriu(M::SymTridiagonalP) = all(M.du .== 0) 
+istriu(M::SymTridiagonalP) = all(M.du .== 0)
 
 
 import Base.tril!, Base.triu!
