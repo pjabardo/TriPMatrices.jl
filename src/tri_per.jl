@@ -127,58 +127,88 @@ import Base.tril!, Base.triu!
 
 function tril!(M::SymTridiagonalP, k::Integer=0)
     n = length(M.d)
-
     cn = M.du[end]
-    b1 = M.dl[1]
-    M.dl[1] = 0
-    
     if abs(k) > n
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
     elseif k < -1
-        fill!(M.dl,0)
-        fill!(M.d,0)
         fill!(M.du,0)
+        dl = copy(M.du)
+        if k > -n
+            M.du[end] = cn
+        end
+        fill!(M.d,0)
+        return TridiagonalP(dl,M.d,M.du)
     elseif k == -1
         fill!(M.d,0)
-        fill!(M.du,0)
+        dl = similar(M.du)
+        for i = 2:n
+            dl[i] = M.du[i-1]
+            M.du[i-1] = 0
+        end
+        dl[1] = 0
+        return TridiagonalP(dl,M.d,M.du)
     elseif k == 0
-        fill!(M.du,0)
-    elseif k >= n-1
-        M.dl[1] = b1
+        dl = similar(M.du)
+        for i = 2:n
+            dl[i] = M.du[i-1]
+            M.du[i-1] = 0
+        end
+        dl[1] = 0
+        return TridiagonalP(dl,M.d,M.du)
+    elseif k >= 1
+        dl = similar(M.du)
+        for i = 2:n
+            dl[i] = M.du[i-1]
+        end
+        if k < n-1
+            dl[1] = 0
+        else
+            dl[1] = cn
+        end
+        return TridiagonalP(dl,M.d,M.du)
     end
-    if k > -n
-        M.du[end] = cn
-    end
-    return M
 end
-    
+
 function triu!(M::SymTridiagonalP, k::Integer=0)
     n = length(M.d)
-
-    b1 = M.dl[1]
     cn = M.du[end]
-    M.du[end] = 0
-    
     if abs(k) > n
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
     elseif k > 1
-        fill!(M.dl,0)
+        
         fill!(M.d,0)
         fill!(M.du,0)
+        dl = copy(M.d)
+        if k < n
+            dl[1] = cn
+        end
+        M.du[end] = 0
+        return TridiagonalP(dl,M.d, M.du)
     elseif k == 1
-        fill!(M.dl,0)
         fill!(M.d,0)
+        dl = zeros(M.du)
+        dl[1] = cn
+        M.du[end] = 0
+        return TridiagonalP(dl, M.d, M.du)
     elseif k == 0
-        fill!(M.dl,0)
-    elseif k <= -(n-1)
-        M.du[end] = cn
+        dl = zeros(M.du)
+        dl[1] = cn
+        M.du[end] = 0
+        return TridiagonalP(dl,M.d,M.du)
+    elseif k <= -1
+        dl = similar(M.du)
+        for i = 2:n
+            dl[i] = M.du[i-1]
+        end
+        dl[1] = cn
+        if k > -(n-1)
+            M.du[end] = 0
+        end
+        return TridiagonalP(dl,M.d,M.du)
     end
-    if k < n
-        M.dl[1] = b1
-    end
-    return M
 end
 
+    
         
 
               
