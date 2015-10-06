@@ -217,6 +217,7 @@ import Base.+, Base.-, Base.*, Base./, Base.==
 /(A::SymTridiagonalP, B::Number) = SymTridiagonalP(A.d/B, A.du/B)
 ==(A::SymTridiagonalP, B::SymTridiagonalP) = (A.d==B.d) && (A.du==B.du)
         
+import Base.A_mul_B!
 
 function A_mul_B!(C::StridedVecOrMat, S::SymTridiagonalP, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
@@ -227,19 +228,20 @@ function A_mul_B!(C::StridedVecOrMat, S::SymTridiagonalP, B::StridedVecOrMat)
         throw(DimensionMismatch("second dimension of B, $n, doesn't match second dimension of C, $(size(C,2))"))
     end
 
-    α = S.dv
-    β = S.ev
+    d = S.d
+    u = S.du
+    un = u[end]
+    
     @inbounds begin
         for j = 1:n
-            x₀, x₊ = B[1, j], B[2, j]
-            β₀ = β[1]
-            C[1, j] = α[1]*x₀ + x₊*β₀
+            b₀, b₊, bn = B[1, j], B[2, j], B[m,j]
+            b0 = b₀
+            C[1, j] = d[1]*b₀ + u[1]*b₊ + un*bn
             for i = 2:m - 1
-                x₋, x₀, x₊ = x₀, x₊, B[i + 1, j]
-                β₋, β₀ = β₀, β[i]
-                C[i, j] = β₋*x₋ + α[i]*x₀ + β₀*x₊
+                b₋, b₀, b₊ = b₀, b₊, B[i + 1, j]
+                C[i, j] = u[i-1]*b₋ + d[i]*b₀ + u[i]*b₊
             end
-            C[m, j] = β₀*x₀ + α[m]*x₊
+            C[m, j] = un*b0 + u[m-1]*b₀ + d[m]*b₊
         end
     end
 
@@ -466,6 +468,7 @@ function A_mul_B!(C::AbstractVecOrMat, A::TridiagonalP, B::AbstractVecOrMat)
     if !(size(C,1) == size(B,1) == nA)
         throw(DimensionMismatch("A has first dimension $nA, B has $(size(B,1)), C has $(size(C,1)) but all must match"))
     end
+    
     if size(C,2) != nB
         throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
     end
@@ -473,16 +476,17 @@ function A_mul_B!(C::AbstractVecOrMat, A::TridiagonalP, B::AbstractVecOrMat)
     d = A.d
     u = A.du
     un = A.du[end]
-    b1 = A.dl[1]
+    l₁ = A.dl[1]
     @inbounds begin
         for j = 1:nB
-            b₀, b₊ = B[1, j], B[2, j]
-            C[1, j] = d[1]*b₀ + u[1]*b₊
+            b₀, b₊, bn = B[1, j], B[2, j], B[nA,j]
+            b0 = b₀
+            C[1, j] = d[1]*b₀ + u[1]*b₊ + l₁*bn
             for i = 2:nA - 1
                 b₋, b₀, b₊ = b₀, b₊, B[i + 1, j]
-                C[i, j] = l[i - 1]*b₋ + d[i]*b₀ + u[i]*b₊
+                C[i, j] = l[i]*b₋ + d[i]*b₀ + u[i]*b₊
             end
-            C[nA, j] = l[nA - 1]*b₀ + d[nA]*b₊
+            C[nA, j] = un*b0 + l[nA]*b₀ + d[nA]*b₊
         end
     end
     C
