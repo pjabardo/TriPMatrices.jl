@@ -14,10 +14,8 @@ function lufact!{T<:BlasFloat}(A::TridiagonalP{T}, pivot::Union{Type{Val{false}}
     cn = A.du[n]
     b1 = A.dl[1]
 
-    du1 = view(A.du, 1:n-1)
-    dl1 = view(A.dl, 2:n)
     ipiv = zeros(BlasInt, n-1)
-    dl1, d, du1, du2, ipiv = Lapack.gttrf!(view(A.du, 1:n-2), view(A.d, 1:n-1), view(A.dl, 2:n-1), A.du2, ipiv)
+    dl1, d, du1, du2, ipiv = Lapack.gttrf!(view(A.dl, 2:n-1), view(A.d, 1:n-1), view(A.du, 1:n-2), A.du2, ipiv)
     LU{T,TridiagonalP{T}}(A, ipiv, 0)
 end
 
