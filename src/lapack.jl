@@ -10,7 +10,7 @@ macro assertargsok() #Handle only negative info codes - use only if positive inf
     :(info[1]<0 && throw(ArgumentError("invalid argument #$(-info[1]) to LAPACK call")))
 end
 macro lapackerror() #Handle all nonzero info codes
-    :(info>0 ? throw(LAPACKException(info[1])) : @assertargsok )
+    :(info[1]>0 ? throw(LAPACKException(info[1])) : @assertargsok )
 end
 
 macro assertnonsingular()
@@ -69,11 +69,11 @@ for (gttrf, gttrs, elty) in
             end
             #du2  = similar(d, $elty, n-2)
             #ipiv = similar(d, BlasInt, n)
-            info = convert(BlasInt, 0)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(gttrf)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{BlasInt}),
-                  &n, dl, d, du, du2, ipiv, &info)
+                  &n, dl, d, du, du2, ipiv, info)
             @lapackerror
             dl, d, du, du2, ipiv
         end
@@ -99,15 +99,110 @@ for (gttrf, gttrs, elty) in
             if n != size(B,1)
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)), but should have $n"))
             end
-            info = convert(BlasInt, 0)
+            
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(gttrs)), liblapack), Void,
                    (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                   &trans, &n, &size(B,2), dl, d, du, du2, ipiv, B, &max(1,stride(B,2)), &info)
+                   &trans, &n, &size(B,2), dl, d, du, du2, ipiv, B, &max(1,stride(B,2)), info)
              @lapackerror
              B
          end
+    end
+end
+
+
+
+
+## (PT) positive-definite, symmetric, tri-diagonal matrices
+## Direct solvers for general tridiagonal and symmetric positive-definite tridiagonal
+for (pttrf, elty, relty) in
+    ((:dpttrf_,:Float64,:Float64),
+     (:spttrf_,:Float32,:Float32),
+     (:zpttrf_,:Complex128,:Float64),
+     (:cpttrf_,:Complex64,:Float32))
+    @eval begin
+        #       SUBROUTINE DPTTRF( N, D, E, INFO )
+        #       .. Scalar Arguments ..
+        #       INTEGER            INFO, N
+        #       .. Array Arguments ..
+        #       DOUBLE PRECISION   D( * ), E( * )
+        function pttrf!(D::StridedVector{$relty}, E::StridedVector{$elty})
+            n = length(D)
+            if length(E) != n - 1
+                throw(DimensionMismatch("E has length $(length(E)), but needs $(n - 1)"))
+            end
+            info = Array(BlasInt, 1)
+            ccall(($(blasfunc(pttrf)), liblapack), Void,
+                  (Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}),
+                  &n, D, E, info)
+            @lapackerror
+            D, E
+        end
+    end
+end
+
+
+
+for (pttrs, elty, relty) in
+    ((:dpttrs_,:Float64,:Float64),
+     (:spttrs_,:Float32,:Float32))
+    @eval begin
+        #       SUBROUTINE DPTTRS( N, NRHS, D, E, B, LDB, INFO )
+        #       .. Scalar Arguments ..
+        #       INTEGER            INFO, LDB, N, NRHS
+        #       .. Array Arguments ..
+        #       DOUBLE PRECISION   B( LDB, * ), D( * ), E( * )
+        function pttrs!(D::StridedVector{$relty}, E::StridedVector{$elty}, B::StridedVecOrMat{$elty})
+            chkstride1(B)
+            n = length(D)
+            if length(E) != n - 1
+                throw(DimensionMismatch("E has length $(length(E)), but needs $(n - 1)"))
+            end
+            if n != size(B,1)
+                throw(DimensionMismatch("B has first dimension $(size(B,1)) but needs $n"))
+            end
+            info = Array(BlasInt, 1)
+            ccall(($(blasfunc(pttrs)), liblapack), Void,
+                  (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  &n, &size(B,2), D, E, B, &max(1,stride(B,2)), info)
+            @lapackerror
+            B
+        end
+    end
+end
+for (pttrs, elty, relty) in
+    ((:zpttrs_,:Complex128,:Float64),
+     (:cpttrs_,:Complex64,:Float32))
+    @eval begin
+#       SUBROUTINE ZPTTRS( UPLO, N, NRHS, D, E, B, LDB, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          UPLO
+#       INTEGER            INFO, LDB, N, NRHS
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   D( * )
+#       COMPLEX*16         B( LDB, * ), E( * )
+        function pttrs!(uplo::Char, D::StridedVector{$relty}, E::StridedVector{$elty}, B::StridedVecOrMat{$elty})
+            chkstride1(B)
+            chkuplo(uplo)
+            n = length(D)
+            if length(E) != n - 1
+                throw(DimensionMismatch("E has length $(length(E)), but needs $(n - 1)"))
+            end
+            if n != size(B,1)
+                throw(DimensionMismatch("B has first dimension $(size(B,1)) but needs $n"))
+            end
+            info = Array(BlasInt, 1)
+            ccall(($(blasfunc(pttrs)), liblapack), Void,
+                  (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  &uplo, &n, &size(B,2), D, E, B, &max(1,stride(B,2)), info)
+            @lapackerror
+            B
+        end
     end
 end
 

@@ -58,3 +58,60 @@ function A_ldiv_B!{T<:BlasFloat}(A::LU{T,TridiagonalP{T}}, B::AbstractVecOrMat)
     end
     B
 end
+
+using Base.LinAlg.Cholesky
+import Base.cholfact!
+immutable Lixo{T,S<:AbstractMatrix} <: Factorization{T}
+    factors::S
+    uplo::Char
+end
+
+function cholfact!{T<:BlasFloat}(A::SymTridiagonalP{T})
+
+    n = length(A.d)
+    cn = A.du[n]
+    
+    Lapack.pttrf!(view(A.d, 1:n-1), view(A.du, 1:n-2))
+    Cholesky{T,SymTridiagonalP}(A, 'U')
+end
+
+import Base.cholfact
+cholfact{T<:BlasFloat}(A::SymTridiagonalP{T}) = cholfact!(copy(A))
+
+    
+factorize(A::SymTridiagonalP) = cholfact(A)
+
+function A_ldiv_B!{T<:BlasFloat}(A::Cholesky{T,SymTridiagonalP}, B::AbstractVecOrMat)
+    n = size(A, 1)
+    n1 = n-1
+    qn1 = view(B, 1:n1, :)
+    nrhs = size(B,2)
+
+    D = view(A.factors.d, 1:n1)
+    Du = view(A.factors.du, 1:n-2)
+    return D, Du, qn1
+    Lapack.pttrs!(D, Du, qn1)
+    
+    x2 = A.factors.x2
+    
+
+    
+    b1  = A.factors.du[n]
+    bn = A.factors.du[n-1]
+    cn1 = bn
+    cn = b1
+    an = A.factors.d[n]
+    
+    for i = 1:nrhs
+        fill!(x2, 0)
+        x2[1] = -b1
+        x2[n1] = -cn1
+        Lapack.pttrs!(D, Du, x2)
+        xn = (B[n,i] - cn*qn1[1,i] - bn*qn1[n1,i]) / (an + cn*x2[1] + bn*x2[n1])
+        B[n,i] = xn
+        for k = 1:n1
+            B[k,i] = B[k,i] + xn*x2[k]
+        end
+    end
+    B
+end
