@@ -81,7 +81,7 @@ cholfact{T<:BlasFloat}(A::SymTridiagonalP{T}) = cholfact!(copy(A))
     
 factorize(A::SymTridiagonalP) = cholfact(A)
 
-function A_ldiv_B!{T<:BlasFloat}(A::Cholesky{T,SymTridiagonalP}, B::AbstractVecOrMat)
+function A_ldiv_B!{T<:BlasFloat}(A::Cholesky{T,SymTridiagonalP{T}}, B::AbstractVecOrMat{T})
     n = size(A, 1)
     n1 = n-1
     qn1 = view(B, 1:n1, :)
@@ -89,7 +89,6 @@ function A_ldiv_B!{T<:BlasFloat}(A::Cholesky{T,SymTridiagonalP}, B::AbstractVecO
 
     D = view(A.factors.d, 1:n1)
     Du = view(A.factors.du, 1:n-2)
-    return D, Du, qn1
     Lapack.pttrs!(D, Du, qn1)
     
     x2 = A.factors.x2
@@ -101,12 +100,12 @@ function A_ldiv_B!{T<:BlasFloat}(A::Cholesky{T,SymTridiagonalP}, B::AbstractVecO
     cn1 = bn
     cn = b1
     an = A.factors.d[n]
-    
     for i = 1:nrhs
         fill!(x2, 0)
         x2[1] = -b1
         x2[n1] = -cn1
         Lapack.pttrs!(D, Du, x2)
+        println("CHEGOU")
         xn = (B[n,i] - cn*qn1[1,i] - bn*qn1[n1,i]) / (an + cn*x2[1] + bn*x2[n1])
         B[n,i] = xn
         for k = 1:n1
@@ -114,4 +113,10 @@ function A_ldiv_B!{T<:BlasFloat}(A::Cholesky{T,SymTridiagonalP}, B::AbstractVecO
         end
     end
     B
+end
+
+import Base.\
+
+function \{T<:BlasFloat}(A::Cholesky{T,SymTridiagonalP{T}}, B::StridedMatrix{T})
+    A_ldiv_B!(A, copy(B))
 end

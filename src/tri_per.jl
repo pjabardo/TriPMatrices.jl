@@ -8,7 +8,7 @@ function SymTridiagonalP{T}(d::Vector{T}, du::Vector{T})
     if length(du) != length(d)
         throw(DimensionMismatch("Subdiagonal has wrong length."))
     end
-    SymTridiagonalP(d, du, zeros(T, length(d)))
+    SymTridiagonalP(d, du, zeros(T, length(d)-1))
 end
 
 import Base.size
